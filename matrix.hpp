@@ -11,72 +11,155 @@
 #ifndef MATRIX_HPP
 #define MATRIX_HPP
 
-#include <cstddef>
-#include <stdexcept>
+#include <cstddef> // std::size_t
+#include <utility> // std::swap
 
 template<typename T>
 class Matrix
 {
+public: using ValueType = T;
 private:
     std::size_t rows;
     std::size_t columns;
-    T** data;
-public:
-    using ValueType = T;
+    ValueType** data;
     
-    // Конструкторы
-    Matrix(std::size_t rows = 1, std::size_t columns = 1, ValueType initValue = 0)
+    
+    inline ValueType** CreateMatrix(std::size_t rows, std::size_t cols)
+        /* Поскольку создавать матрицы я буду часто, то я выделю это в отдельную функцию
+           
+         P.S. Данная функция private, потому что я хочу скрыть её от посторонних глаз.
+         Можно было использовать static, но static не работает (возможно он нормально работает, просто я ничего не
+         понимаю) */
+    {
+        ValueType** matrix = new ValueType*[rows];
+        for (std::size_t i = 0; i < rows; i++)
+        {
+            matrix[i] = new ValueType[cols];
+        }
+        return matrix;
+    }
+    
+    inline void InitializeMatrix(ValueType** to, ValueType** from, std::size_t rows, std::size_t cols)
+        /* Аналогично CreateMatrix. Инициализацию от 1-мерного массива и инициализирующего значения не стал добавлять
+           т.к. я их использую всего 1 раз. */
+        
+    {
+        for (std::size_t i = 0; i < rows; i++)
+        {
+            for (std::size_t j = 0; j < cols; j++)
+            {
+                to[i][j] = from[i][j];
+            }
+        }
+    }
+public:
+    Matrix(std::size_t rows = 0, std::size_t cols = 0, ValueType initValue = 0)
         // Стандартный конструктор
     {
-        if (rows == 0 ^ columns == 0)
-            // Нельзя создать матрицу с 0 строками (исключающее)или 0 столбцами
+        this->rows = rows;
+        this->columns = cols;
+        this->data = CreateMatrix(rows, cols);
+        for (std::size_t i = 0; i < rows; i++) // Инициализация data
         {
-            throw std::invalid_argument("Cannot create matrix with 0 rows (x)or 0 columns");
-        }
-        // Создание матрицы (начало)
-        this->data = new ValueType*[rows];
-        for (std::size_t i = 0; i < rows; i++)
-        {
-            this->data = new ValueType[columns];
-        }
-        /* Создание матрицы (конец),
-           Инициализация матрицы (начало) */
-        for (std::size_t i = 0; i < rows; i++)
-        {
-            for (std::size_t j = 0; j < columns; j++)
+            for (std::size_t j = 0; j < cols; j++)
             {
                 this->data[i][j] = initValue;
             }
         }
-        /* Инициализация матрицы (конец)
-           Инициализация других полей класса (начало) */
-        this->rows = rows;
-        this->columns = columns;
-        // Инициализация других полей класса (конец)
     }
     
-    Matrix(ValueType** matrix, std::size_t rows, std::size_t columns,
+    Matrix(ValueType** dynamicMatrix, std::size_t rows, std::size_t cols,
            bool eliminateAfterCreation = false)
         /* Конструктор от другой динамической матрицы. Если нужно уничтоить матрицу, которая была передана в
            качестве параметра, посленим аргументом нужно указать true */
     {
+        this->rows = rows;
+        this->columns = cols;
+        this->data = CreateMatrix(rows, cols);
+        InitializeMatrix(this->data, dynamicMatrix, rows, cols);
         if (eliminateAfterCreation)
+            // Если флаг eliminateAfterCreation установлен как true
         {
-            this->data = matrix;
-            for (std::size_t i = 0; i < rows; i++)
+            InitializeMatrix(this->data, dynamicMatrix, rows, cols);
+            for (std::size_t i = 0; i < rows; i++) // удаление matrix
             {
-                delete[] matrix[i];
+                delete[] dynamicMatrix[i];
             }
-            delete[] matrix;
-            return;
+            delete[] dynamicMatrix;
         }
-        for (std::size_t i = 0; i < rows; i++)
+    }
+    
+    Matrix(ValueType* staticMatrix, std::size_t rows, std::size_t cols)
+        /* Конструктор от другой статической матрицы. Для использования приведите матрицу к указателю на тип матрицы
+           или ссылку на 1-ый элемент (пример: &<название>[0][0] или (<тип>*)<название>) */
+    {
+        this->rows = rows;
+        this->columns = cols;
+        this->data = CreateMatrix(rows, cols);
+        for (std::size_t i = 0; i < rows; i++) // Инициализация data
         {
-            for (std::size_t j = 0; j < columns; j++)
+            for (std::size_t j = 0; j < cols; j++)
             {
-                this->data[i][j] = matrix[i][j];
+                this->data[i][j] = staticMatrix[i * cols + j];
+                /* (i * cols + j) - данная формула позволяет по i и j узнать элемент в матрице,
+                   представленной 1-мерным массивом */
             }
         }
+    }
+    
+    
+    Matrix(const Matrix<ValueType>& other)
+        // Конструктор копирования
+    {
+        this->rows = other.rows;
+        this->columns = other.columns;
+        this->data = CreateMatrix(this->rows, this->columns);
+        InitializeMatrix(this->data, other.data, this->rows, this->columns);
+    }
+    
+    Matrix& operator=(const Matrix<ValueType>& whatAssign)
+        // Оператор присваивания
+    {
+        if (this != &whatAssign)
+        {
+            Matrix<ValueType>(whatAssign).Swap(*this);
+        }
+        return *this;
+    }
+    
+    
+    Matrix(Matrix<ValueType>&& other)
+        // Перемещающий конструктор
+    {
+        this->Swap(other);
+    }
+    
+    Matrix& operator=(Matrix<ValueType>&& whatMove)
+        // Перемещающий оператор присваивания
+    {
+        this->Swap(whatMove);
+        return *this;
+    }
+    
+    
+    ~Matrix()
+        // Деструктор
+    {
+        for (std::size_t i = 0; i < this->rows; i++)
+        {
+            delete[] this->data[i];
+        }
+        delete[] this->data;
+    }
+    
+    
+    
+    void Swap(Matrix<ValueType>& other)
+        // Метод Swap. Меняет this и other местами.
+    {
+        std::swap(this->rows, other.rows);
+        std::swap(this->columns, other.columns);
+        std::swap(this->data, other.data);
     }
 };
 
