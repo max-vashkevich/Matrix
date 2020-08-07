@@ -8,99 +8,127 @@
 
 /* Вся реализация размещена в hpp файле т.к. данный класс — шаблонный */
 
+/*
+    Условные обозначения:
+
+    1. DM - динамическая матрица (не обертка, просто 2 указателя на ValueType)
+    2. SM - статическая матрица
+*/
+
 #ifndef MATRIX_HPP
-#define MATRIX_HPP
+#define MATRIX_HPP 1
 
 #include <cstddef> // std::size_t
-#include <utility> // std::swap
+#include <ostream> // std::ostream
 
 template<typename T>
 class Matrix
 {
-public: using ValueType = T;
+public:
+    using ValueType = T;
+    using SizeType = std::size_t;
 private:
-    std::size_t rows;
-    std::size_t columns;
+    SizeType rows;
+    SizeType columns;
     ValueType** data;
+
     
-    
-    inline ValueType** CreateMatrix(std::size_t rows, std::size_t cols)
+    inline ValueType** CreateDM(const SizeType& rows, const SizeType& cols)
         /* Поскольку создавать матрицы я буду часто, то я выделю это в отдельную функцию
            
          P.S. Данная функция private, потому что я хочу скрыть её от посторонних глаз.
          Можно было использовать static, но static не работает (возможно он нормально работает, просто я ничего не
          понимаю) */
     {
-        ValueType** matrix = new ValueType*[rows];
-        for (std::size_t i = 0; i < rows; i++)
+        ValueType** DM = new ValueType*[rows];
+        for (SizeType i = 0; i < rows; i++)
         {
-            matrix[i] = new ValueType[cols];
+            DM[i] = new ValueType[cols];
         }
-        return matrix;
+        return DM;
+    }
+
+    inline void EliminateDM(ValueType** DM, const SizeType& rows)
+        // Аналогично CreateDM.
+    {
+        for (SizeType i = 0; i < rows; i++)
+        {
+            delete[] DM[i];
+        }
+        delete[] DM;
     }
     
-    inline void InitializeMatrix(ValueType** to, ValueType** from, std::size_t rows, std::size_t cols)
-        /* Аналогично CreateMatrix. Инициализацию от 1-мерного массива и инициализирующего значения не стал добавлять
-           т.к. я их использую всего 1 раз. */
+    inline void InitializeDM(ValueType** to, ValueType** from,
+                             const SizeType& rows, const SizeType& cols)
+        /* Аналогично CreateMatrix. Инициализацию от 1-мерного массива и инициализирующего значения не стал добавлять т.к. я их использую всего 1 раз. */
         
     {
-        for (std::size_t i = 0; i < rows; i++)
+        for (SizeType i = 0; i < rows; i++)
         {
-            for (std::size_t j = 0; j < cols; j++)
+            for (SizeType j = 0; j < cols; j++)
             {
                 to[i][j] = from[i][j];
             }
         }
     }
-public:
-    Matrix(std::size_t rows = 0, std::size_t cols = 0, ValueType initValue = 0)
-        // Стандартный конструктор
+
+
+    class Proxy
+        // Вспомогательный класс. Нужен для реализации двойного индексирования
     {
-        this->rows = rows;
-        this->columns = cols;
-        this->data = CreateMatrix(rows, cols);
-        for (std::size_t i = 0; i < rows; i++) // Инициализация data
+    private:
+        Matrix<ValueType>& matrix;
+        SizeType row;
+    public:
+        Proxy(Matrix<ValueType>& matrix, const SizeType& row)
+            // Конструктор Proxy
+            : matrix(matrix), row(row)
+        {}
+
+        ValueType& operator[](const SizeType& col)
+            // Оператор индексирования Proxy
         {
-            for (std::size_t j = 0; j < cols; j++)
+            return this->matrix.data[this->row][col];
+        }
+    };
+public:
+    Matrix(const SizeType& rows = 0, const SizeType& cols = 0, const ValueType& initValue = 0)
+        // Стандартный конструктор
+        : rows(rows), columns(cols), data(CreateDM(rows, cols))
+    {
+        for (SizeType i = 0; i < rows; i++) // Инициализация data
+        {
+            for (SizeType j = 0; j < cols; j++)
             {
                 this->data[i][j] = initValue;
             }
         }
     }
     
-    Matrix(ValueType** dynamicMatrix, std::size_t rows, std::size_t cols,
-           bool eliminateAfterCreation = false)
+    Matrix(ValueType** DM, const SizeType& rows, const SizeType& cols,
+           const bool& mustEliminateDM = false)
         /* Конструктор от другой динамической матрицы. Если нужно уничтоить матрицу, которая была передана в
            качестве параметра, посленим аргументом нужно указать true */
+        : rows(rows), columns(cols), data(CreateDM(rows, cols))
     {
-        this->rows = rows;
-        this->columns = cols;
-        this->data = CreateMatrix(rows, cols);
-        InitializeMatrix(this->data, dynamicMatrix, rows, cols);
-        if (eliminateAfterCreation)
-            // Если флаг eliminateAfterCreation установлен как true
+        InitializeDM(this->data, DM, rows, cols);
+        if (mustEliminateDM)
+            // Если флаг mustEliminateDM установлен как true
         {
-            InitializeMatrix(this->data, dynamicMatrix, rows, cols);
-            for (std::size_t i = 0; i < rows; i++) // удаление matrix
-            {
-                delete[] dynamicMatrix[i];
-            }
-            delete[] dynamicMatrix;
+            EliminateDM(DM, rows);
         }
     }
     
-    Matrix(ValueType* staticMatrix, std::size_t rows, std::size_t cols)
+    Matrix(ValueType* SM, const SizeType& rows, const SizeType& cols)
         /* Конструктор от другой статической матрицы. Для использования приведите матрицу к указателю на тип матрицы
            или ссылку на 1-ый элемент (пример: &<название>[0][0] или (<тип>*)<название>) */
+        : rows(rows), columns(cols), data(CreateDM(rows, cols))
     {
-        this->rows = rows;
-        this->columns = cols;
-        this->data = CreateMatrix(rows, cols);
-        for (std::size_t i = 0; i < rows; i++) // Инициализация data
+        for (SizeType i = 0; i < rows; i++) // Инициализация data
         {
-            for (std::size_t j = 0; j < cols; j++)
+            for (SizeType j = 0; j < cols; j++)
             {
-                this->data[i][j] = staticMatrix[i * cols + j];
+                this->data[i][j] = SM[i * cols + j];
                 /* (i * cols + j) - данная формула позволяет по i и j узнать элемент в матрице,
                    представленной 1-мерным массивом */
             }
@@ -110,11 +138,9 @@ public:
     
     Matrix(const Matrix<ValueType>& other)
         // Конструктор копирования
+        : rows(other.rows), columns(other.columns), data(CreateDM(this->rows, this->columns))
     {
-        this->rows = other.rows;
-        this->columns = other.columns;
-        this->data = CreateMatrix(this->rows, this->columns);
-        InitializeMatrix(this->data, other.data, this->rows, this->columns);
+        InitializeDM(this->data, other.data, this->rows, this->columns);
     }
     
     Matrix& operator=(const Matrix<ValueType>& whatAssign)
@@ -130,6 +156,7 @@ public:
     
     Matrix(Matrix<ValueType>&& other)
         // Перемещающий конструктор
+        : rows(0), columns(0), data(nullptr)
     {
         this->Swap(other);
     }
@@ -137,6 +164,9 @@ public:
     Matrix& operator=(Matrix<ValueType>&& whatMove)
         // Перемещающий оператор присваивания
     {
+        this->rows = 0;
+        this->columns = 0;
+        this->data = nullptr;
         this->Swap(whatMove);
         return *this;
     }
@@ -145,21 +175,81 @@ public:
     ~Matrix()
         // Деструктор
     {
-        for (std::size_t i = 0; i < this->rows; i++)
-        {
-            delete[] this->data[i];
-        }
-        delete[] this->data;
+        EliminateDM(this->data, this->rows);
     }
     
+
     
-    
-    void Swap(Matrix<ValueType>& other)
-        // Метод Swap. Меняет this и other местами.
+    Proxy operator[](const SizeType& row)
+        // Оператор индексирования
     {
-        std::swap(this->rows, other.rows);
-        std::swap(this->columns, other.columns);
-        std::swap(this->data, other.data);
+        return Proxy(*this, row);
+    }
+
+    ValueType& At(SizeType row, SizeType col)
+    {
+        return this->data[row][col];
+    }
+
+
+
+
+    
+    #define LHS_PTR this // this - это lhs, поэтому, чтобы было удобнее, я сделал этот дефайн.
+    void Swap(Matrix<ValueType>& rhs)
+        // Метод Swap. Меняет this (LHS_PTR) и rhs местами.
+    {
+        // При замене data можно использовать присваивание "напрямую" т.к. используется std::move
+        ValueType** tmpValueTypeDM = std::move(LHS_PTR->data);
+        LHS_PTR->data = std::move(rhs.data);
+        rhs.data = std::move(tmpValueTypeDM);
+
+        SizeType tmpSizeType = LHS_PTR->rows;
+        LHS_PTR->rows = rhs.rows;
+        rhs.rows = tmpSizeType;
+
+        tmpSizeType = LHS_PTR->columns;
+        LHS_PTR->columns = rhs.columns;
+        rhs.columns = tmpSizeType;
+    }
+    #undef LHS_PTR
+
+    void Resize(const SizeType& rows, const SizeType& cols)
+        // Метод Resize. Меняет размер матрицы
+    {
+        ValueType** resized = CreateDM(rows, cols);
+        for (SizeType i = 0; i < rows; i++)
+        {
+            for (SizeType j = 0; j < cols; j++)
+            {
+                resized[i][j] = (i < this->rows && j < this->columns) ?
+                                this->data[i][j] : static_cast<ValueType>(0);
+            }
+        }
+        EliminateDM(this->data, this->rows);
+        this->data = CreateDM(rows, cols);
+        InitializeDM(this->data, resized, rows, cols);
+        this->rows = rows;
+        this->columns = cols;
+    }
+
+
+    SizeType GetRows() const
+        // Метод GetRows. Вовращает кол-во строк в матрице
+    {
+        return this->rows;
+    }
+
+    SizeType GetColumns() const
+        // Метод GetColumns. Вовращает кол-во столбцов в матрице
+    {
+        return this->columns;
+    }
+
+    ValueType** GetDataAddress()
+        // Метод GetDataAddress. Возвращает адрес data.
+    {
+        return this->data;
     }
 };
 
