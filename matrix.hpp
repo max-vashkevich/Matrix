@@ -10,8 +10,10 @@
 
 /*
 Условные обозначения:
-    1. Префикс PMem_ - приватный член класса (PMem = Private Member).
-    2. DM - Динамическая матрица (не класс, просто 2 указателя на T)
+  1. Префикс PMem_ - приватный член класса (PMem = Private Member).
+  2. DM - Динамическая матрица (не класс, просто 2 указателя на T).
+  3. #ifdef __GNUC__ - Если используется компилятор GNU
+  4. #ifdef _MSC_VER - Если используется компилятор Microsoft
 */
 
 #ifndef MATRIX_HPP
@@ -20,8 +22,15 @@
 #include <cstddef> // std::size_t
 #include <utility> // std::move
 #include <stdexcept> // std::invalid_argument
-#include <bits/functexcept.h> // std::__throw_out_of_range_fmt
+
+#ifdef __GNUC__ // Подключаем в случае использования компилятора GNU
+#include <bits/functexcept.h> // std::throw_out_of_range_fmt
 #include <bits/c++config.h> // __N
+#endif // __GNUC__
+
+#ifdef _MSC_VER
+#include <yvals.h> // _STL_REPORT_ERROR
+#endif // _MSC_VER
 
 template<typename T>
 class Matrix
@@ -31,12 +40,12 @@ private:
     std::size_t PMem_columns; // Кол-во столбцов в матрице
     T** PMem_data; // Сама матрица
 
-    
+
     inline T** PMem_CreateDM(const std::size_t& rows, const std::size_t& cols)
         /* Поскольку создавать матрицы я буду часто, то я выделю это в отдельную функцию
-           
-         P.S. Данная функция private, потому что я хочу скрыть её от посторонних глаз.
-         Можно было использовать static, но static не работает :( (или работает) */
+
+        P.S. Данная функция private, потому что я хочу скрыть её от посторонних глаз.
+        Можно было использовать static, но static не работает :( (или работает) */
     {
         T** DM = new T*[rows]; // Создание массива массивов
         for (std::size_t i = 0; i < rows; i++) // Создание массивов
@@ -55,11 +64,11 @@ private:
         }
         delete[] DM; // Удаление массива массивов
     }
-    
+
     inline void PMem_InitializeDM(T** to, T** from, const std::size_t& rows, const std::size_t& cols)
         /* Аналогично CreateMatrix. Инициализацию от 1-мерного массива и инициализирующего значения
-           не стал добавлять т.к. я их использую всего 1 раз. */
-        
+          не стал добавлять т.к. я их использую всего 1 раз. */
+
     {
         for (std::size_t i = 0; i < rows; i++)
         {
@@ -79,36 +88,57 @@ private:
         std::size_t PMem_row; // Строка в которой будет искаться элемент
     public:
         PMem_Proxy(Matrix<T>& matrix, const std::size_t& row)
-            // Конструктор Proxy
+          // Конструктор Proxy
             : PMem_matrix(matrix), PMem_row(row)
         {}
 
         T& operator[](const std::size_t& col)
-            // Оператор индексирования Proxy
+          // Оператор индексирования Proxy
         {
+            #ifdef _MSC_VER
+             _STL_VERIFY(this->PMem_row >= this->Pmem_matrix.PMem_rows || col >= this->Pmem_matrix.PMem_columns,
+                        "Matrix subscript out of range.");
+            #endif
             return this->PMem_matrix.PMem_data[this->PMem_row][col];
         }
-    }
+    };
+
 
     void PMem_RangeCheck(std::size_t i, std::size_t j)
         /* Метод RangeCheck. Проверяет, не вышли ли i и j за границы матрицы. В случае выхода бросается исключение
-           std::out_of_range */
+          std::out_of_range */
     {
         if (i >= this->PMem_rows || j >= this->PMem_columns)
         {
             if (i >= this->PMem_rows)
             {
+                #ifdef __GNUC__
                 std::__throw_out_of_range_fmt(__N("In Matrix::PMem_RangeCheck(): i (which is %zu) >= "
                                                   "this->GetRows() "
                                                   "(which is %zu)"),
                                               i, this->PMem_rows);
+                #elif defined(_MSC_VER)
+                _STL_REPORT_ERROR("Matrix subscript out of range "
+                                  "(first argument >= this->GetRows())");
+                #else
+                throw std::out_of_range("In Matrix::PMem_RangeCheck(): first argument >= "
+                                        "this->GetRows()");
+                #endif // __GNUC__ и _MSC_VER
             }
             if (j >= this->PMem_columns)
             {
+                #ifdef __GNUC__
                 std::__throw_out_of_range_fmt(__N("In Matrix::PMem_RangeCheck(): j (which is %zu) >= "
                                                   "this->GetColumns() "
                                                   "(which is %zu)"),
                                               j, this->PMem_columns);
+                #elif defined(_MSC_VER)
+                _STL_REPORT_ERROR("Matrix subscript out of range "
+                                  "(second argument >= this->GetColumns())");
+                #else
+                throw std::out_of_range("In Matrix::PMem_RangeCheck(): second argument >= "
+                                        "this->GetColumns()");
+                #endif // __GNUC__ и _MSC_VER
             }
         }
     }
@@ -125,11 +155,11 @@ public:
             }
         }
     }
-    
+
     Matrix(T** DM, const std::size_t& rows, const std::size_t& cols,
            const bool& mustEliminateDM = false)
-        /* Конструктор от другой динамической матрицы. Если нужно уничтоить матрицу, которая была передана в
-           качестве параметра, посленим аргументом нужно указать true */
+            /* Конструктор от другой динамической матрицы. Если нужно уничтоить матрицу, которая была передана в
+               качестве параметра, посленим аргументом нужно указать true */
         : PMem_rows(rows), PMem_columns(cols), PMem_data(PMem_CreateDM(rows, cols))
     {
         PMem_InitializeDM(this->PMem_data, DM, rows, cols);
@@ -139,7 +169,7 @@ public:
             PMem_EliminateDM(DM, rows);
         }
     }
-    
+
     Matrix(T* SM, const std::size_t& rows, const std::size_t& cols)
         /* Конструктор от другой статической матрицы. Для использования приведите матрицу к указателю на тип матрицы
            или ссылку на 1-ый элемент (пример: &<название>[0][0] или (<тип>*)<название>) */
@@ -151,12 +181,12 @@ public:
             {
                 this->PMem_data[i][j] = SM[i * cols + j];
                 /* (i * cols + j) - данная формула позволяет по i и j узнать элемент в матрице,
-                   представленной 1-мерным массивом */
+                    представленной 1-мерным массивом */
             }
         }
     }
-    
-    
+
+
     Matrix(const Matrix<T>& other)
         // Конструктор копирования
         : PMem_rows(other.rows), PMem_columns(other.columns),
@@ -164,7 +194,7 @@ public:
     {
         PMem_InitializeDM(this->PMem_data, other.PMem_data, this->PMem_rows, this->PMem_columns);
     }
-    
+
     Matrix& operator=(const Matrix<T>& whatAssign)
         // Оператор присваивания. Реализован при помощи Swap
     {
@@ -174,16 +204,17 @@ public:
         }
         return *this;
     }
-    
-    
+
+
     Matrix(Matrix<T>&& other) noexcept
-        // Перемещающий конструктор. Реализован при помощи Swap
-        // Обнуление this
-        : PMem_rows(0), PMem_columns(0), PMem_data(nullptr)
+      // Перемещающий конструктор. Реализован при помощи Swap
+      // Обнуление this
+      : PMem_rows(0), PMem_columns(0), PMem_data(nullptr)
     {
         this->Swap(other); // Замена обнуленного this и other
     }
-    
+
+
     Matrix& operator=(Matrix<T>&& whatMove) noexcept
         // Перемещающий оператор присваивания. Реализован при помощи Swap
     {
@@ -191,19 +222,20 @@ public:
         this->PMem_rows = 0;
         this->PMem_columns = 0;
         this->PMem_data = nullptr;
+
         this->Swap(whatMove); // Замена обнуленного this и whatMove
         return *this;
     }
-    
-    
+
+
     ~Matrix() noexcept
         // Деструктор
     {
         PMem_EliminateDM(this->PMem_data, this->PMem_rows);
     }
-    
 
-    
+
+
     PMem_Proxy operator[](const std::size_t& row)
         // Оператор индексирования. Работает с помощью Proxy
     {
@@ -219,8 +251,6 @@ public:
 
 
 
-
-    
     #define LHS_PTR this // this - это lhs, поэтому, чтобы было удобнее, я сделал этот дефайн.
     void Swap(Matrix<T>& rhs)
         // Метод Swap. Меняет this (LHS_PTR) и rhs местами.
@@ -250,7 +280,7 @@ public:
             for (std::size_t j = 0; j < cols; j++)
             {
                 resized[i][j] = (i < this->PMem_rows && j < this->PMem_columns) ?
-                                this->PMem_data[i][j] : static_cast<T>(0);
+                this->PMem_data[i][j] : static_cast<T>(0);
             }
         }
         PMem_EliminateDM(this->PMem_data, this->PMem_rows);
@@ -272,7 +302,7 @@ public:
     bool Empty() const noexcept
         // Метод Epmty. Проверяет, пуста ли матрица
     {
-        return this->PMem_rows != 0 && this->PMem_columns != 0;
+        return this->PMem_rows == 0 && this->PMem_columns == 0;
     }
 
 
@@ -300,40 +330,5 @@ public:
         return this->PMem_data[idx];
     }
 };
-
-template<typename T>
-Matrix<T> operator+(const Matrix<T>& lhs, const Matrix<T>& rhs)
-{
-
-}
-
-
-template<typename T>
-bool operator==(const Matrix<T>& lhs, const Matrix<T>& rhs)
-    // Оператор ==. Проверяет lhs и rhs на равенство
-{
-    if (lhs.GetRows() == rhs.GetRows() && lhs.GetColumns() == rhs.GetColumns())
-    {
-        for (std::size_t i = 0; i < lhs.GetRows(); i++) // lhs или rhs, не принципиально т.к. они равны
-        {
-            for (std::size_t j = 0; j < lhs.GetColumns(); j++)
-            {
-                if (lhs[i][j] != rhs[i][j])
-                {
-                    return false;
-                }
-            }
-        }
-        return true;
-    }
-    return false;
-}
-
-template<typename T>
-inline bool operator!=(const Matrix<T>& lhs, const Matrix<T>& rhs)
-    // Оператор !=. Проверяет lhs и rhs на неравенство. Работает при помощи опреатора ==
-{
-    return !(lhs == rhs);
-}
 
 #endif /* MATRIX_HPP */
