@@ -21,15 +21,15 @@
 
 #include <cstddef> // std::size_t
 #include <utility> // std::move
-#include <stdexcept> // std::invalid_argument
+#include <stdexcept> // std::length_error
 
-#ifdef __GNUC__ // Подключаем в случае использования компилятора GNU
+#ifdef __GNUC__
 #include <bits/functexcept.h> // std::throw_out_of_range_fmt
 #include <bits/c++config.h> // __N
 #endif // __GNUC__
 
 #ifdef _MSC_VER
-#include <yvals.h> // _STL_REPORT_ERROR
+#include <yvals.h> // _STL_REPORT_ERROR, _STL_VERIFY
 #endif // _MSC_VER
 
 template<typename T>
@@ -95,10 +95,13 @@ private:
         T& operator[](const std::size_t& col)
           // Оператор индексирования Proxy
         {
-            #ifdef _MSC_VER
-             _STL_VERIFY(this->PMem_row >= this->Pmem_matrix.PMem_rows || col >= this->Pmem_matrix.PMem_columns,
-                        "Matrix subscript out of range.");
-            #endif
+#ifdef _MSC_VER
+            _STL_VERIFY(this->PMem_row < this->Pmem_matrix.PMem_rows
+                        || col < this->Pmem_matrix.PMem_columns,
+                       "Matrix subscript out of range.");
+            /* Здесь у меня была проблема (не компилилось). Но на
+               след. день все прошло. Списал на баг Visual Studio */
+#endif
             return this->PMem_matrix.PMem_data[this->PMem_row][col];
         }
     };
@@ -112,33 +115,27 @@ private:
         {
             if (i >= this->PMem_rows)
             {
-                #ifdef __GNUC__
+#ifdef __GNUC__
                 std::__throw_out_of_range_fmt(__N("In Matrix::PMem_RangeCheck(): i (which is %zu) >= "
                                                   "this->GetRows() "
                                                   "(which is %zu)"),
                                               i, this->PMem_rows);
-                #elif defined(_MSC_VER)
-                _STL_REPORT_ERROR("Matrix subscript out of range "
-                                  "(first argument >= this->GetRows())");
-                #else
+#else  // Если используется другой компиляор (не GNU)
                 throw std::out_of_range("In Matrix::PMem_RangeCheck(): first argument >= "
                                         "this->GetRows()");
-                #endif // __GNUC__ и _MSC_VER
+#endif // __GNUC__ 
             }
             if (j >= this->PMem_columns)
             {
-                #ifdef __GNUC__
+#ifdef __GNUC__
                 std::__throw_out_of_range_fmt(__N("In Matrix::PMem_RangeCheck(): j (which is %zu) >= "
                                                   "this->GetColumns() "
                                                   "(which is %zu)"),
                                               j, this->PMem_columns);
-                #elif defined(_MSC_VER)
-                _STL_REPORT_ERROR("Matrix subscript out of range "
-                                  "(second argument >= this->GetColumns())");
-                #else
+#else // Если используется другой компиляор (не GNU)
                 throw std::out_of_range("In Matrix::PMem_RangeCheck(): second argument >= "
                                         "this->GetColumns()");
-                #endif // __GNUC__ и _MSC_VER
+#endif // __GNUC__
             }
         }
     }
@@ -147,6 +144,18 @@ public:
         // Стандартный конструктор
         : PMem_rows(rows), PMem_columns(cols), PMem_data(PMem_CreateDM(rows, cols))
     {
+        if (rows == 0 ^ cols == 0)
+            /* Здесь я решил, что нужно бросить исключение т.к. 
+               нулевой размер каких-л. "свойств" матрицы может вызвать
+               неопределенное поведение */
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Bad Matrix size.");
+#else
+            throw std::length_error("Rows mustn't be 0 xor columns mustn't be 0\n"
+                                    "!(rows == 0 ^ cols == 0) must be true.");
+#endif
+        }
         for (std::size_t i = 0; i < rows; i++) // Инициализация data
         {
             for (std::size_t j = 0; j < cols; j++)
@@ -306,26 +315,26 @@ public:
     }
 
 
-    std::size_t GetRows() const
-        // Метод GetRows. Вовращает кол-во строк в матрице
+    std::size_t Rows() const
+        // Метод Rows. Вовращает кол-во строк в матрице
     {
         return this->PMem_rows;
     }
 
-    std::size_t GetColumns() const
-        // Метод GetColumns. Вовращает кол-во столбцов в матрице
+    std::size_t Columns() const
+        // Метод Columns. Вовращает кол-во столбцов в матрице
     {
         return this->PMem_columns;
     }
 
-    T** GetDataAddress() noexcept
-        // Метод GetDataAddress (1 перегрузка). Возвращает адрес массива массивов
+    T** Data() noexcept
+        // Метод Data (1 перегрузка). Возвращает адрес массива массивов
     {
         return this->PMem_data;
     }
 
-    T* GetDataAddress(std::size_t idx) noexcept
-        // Метод GetDataAddress (2 перегрузка). Возвращает адрес массива под индексом idx в массиве массивов
+    T* Data(std::size_t idx) noexcept
+        // Метод Data (2 перегрузка). Возвращает адрес массива под индексом idx в массиве массивов
     {
         return this->PMem_data[idx];
     }
