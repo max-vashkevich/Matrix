@@ -45,8 +45,8 @@ class Matrix;
 namespace detail
     /*
      *  Данный namespace содержит служебные функции, которые используются данным классом.
-     *  Просьба не использовать функции из этого пространства имён, а тем более, само пространство
-     *  имён.
+     *  Использовать функции из этого пространства имён, а тем более, подключать само пространство
+     *  имён запрещено.
      */
 {
     template<typename T>
@@ -61,7 +61,7 @@ namespace detail
     }
 
     template<typename T>
-    void EliminateDM(T** DM, const std::size_t& rows)
+    void EliminateDM(T**& DM, const std::size_t& rows)
         // Аналогично CreateDM.
     {
         if (DM != nullptr) // Если DM не нулевой указатель
@@ -76,7 +76,7 @@ namespace detail
     }
 
     template<typename T>
-    void InitializeDM(T** to, T** from, const std::size_t& rows, const std::size_t& cols)
+    void InitializeDM(T**& to, const T** from, const std::size_t& rows, const std::size_t& cols)
         /* Аналогично CreateDM. Инициализацию от 1-мерного массива и инициализирующего значения
            не стал добавлять т.к. я их использую всего 1 раз. */
     {
@@ -125,17 +125,16 @@ namespace detail
     }
 
     template<typename T, typename U>
-    void CheckForPossiblityOfDoingAnArithmeticOperation(const Matrix<T>& x, const Matrix<U>& y,
-                                                        const std::string& whatOperator)
-        /* Функция CheckForPossiblityOfDoingAnArithmeticOperation. Проыеряет, возможно ли
+    void CheckArithmeticOperationPossiblity(const Matrix<T>& x, const Matrix<U>& y, const std::string& whatOperator)
+        /* Функция CheckArithmeticOperationPossiblity. Проверяет, возможно ли
            сделать арифметическую операцию над матрицами. Если невозможно бросается исключение
            std::invalid_argument или вылезет окно с ошибкой (если используется компилятор Microsoft) */
     {
         if (!std::is_arithmetic<T>::value || !std::is_arithmetic<U>::value)
         {
 #ifdef _MSC_VER
-            _STL_REPORT_ERROR("Wrong template arguments of matrices (to use operator" + whatOperator +
-                              " template arguments must be arithmetic).");
+            _STL_REPORT_ERROR("Wrong template arguments of matrix (to use operator" + whatOperator +
+                              " template arguments of both matrices must be arithmetic).");
 #else // Если используется не компилятор Microsoft
             throw std::invalid_argument("In operator" + whatOperator + ": template argument "
                                         "of matrix is not arithmetic. "
@@ -151,6 +150,93 @@ namespace detail
             throw std::invalid_argument("In operator" + whatOperator + ": Matrices have different size."
                                         " (Matrices must have equal size).");
 #endif // _MSC_VER
+        }
+        if (x.Rows() == 0) /* Rows и columns сравнивать не нужно т.к. если rows=0,
+                              то и columns будет равен 0. Также и с "x" и "y". Они в любом случае будут равны */
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Marix have null size. To use operator" + whatOperator +
+                              " Matrix's size mustn't be null");
+#else
+            throw std::invalid_argument("In operator" + whatOperator + ": Matrix have null size."
+                                        " (Matrix's size mustn't be null).");
+#endif
+        }
+    }
+
+    template<typename T, typename U>
+    void CheckArithmeticOperationPossiblity(const Matrix<T>& x, U number, const std::string& whatOperator)
+        // Cм. 1 перегрузку CheckArithmeticOperationPossiblity
+    {
+        if (!std::is_arithmetic<T>::value)
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Wrong template argument of Matrix. (to use operator" + whatOperator +
+                              " matrix must be arithmetic.)");
+#else // Если используется не компилятор Microsoft
+            throw std::invalid_argument("In operator" + whatOperator + ": matrix's template argument is"
+                                        "not arithmetic. (It must be arithmetic)");
+#endif // _MSC_VER
+        }
+        if (!std::is_arithmetic<U>::value)
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Wrong number type. (to use operator" + whatOperator + " number type "
+                              "must be arithmetic)");
+#else // Если используется не компилятор Microsoft
+            throw std::invalid_argument("In operator" + whatOperator + ": number type is not arithmetic. "
+                                        "(It must be arithmetic)");
+#endif // _MSC_VER
+        }
+        if (x.Rows() == 0)
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Marix have null size. To use operator" + whatOperator +
+                              " Matrix's size mustn't be null");
+#else
+            throw std::invalid_argument("In operator" + whatOperator + ": Matrix have null size."
+                                        " (Matrix's size mustn't be null).");
+#endif
+        }
+    }
+
+    template<typename T, typename U>
+    void CheckMatrix_matrixMultiplicationPossiblity(const Matrix<T>& x, const Matrix<U>& y, const std::string& whatOperator)
+        /* Всё тот же CheckArithmeticOperationPossiblity, только для умножения,
+           назвал по-другому т.к. принимает те же аргументы, что и
+           1-я перегрузка CheckArithmeticOperationPossiblity. */
+    {
+        if (!std::is_arithmetic<T>::value || !std::is_arithmetic<U>::value)
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Wrong template arguments of matrix (to use operator" + whatOperator +
+                                      " template arguments of both matrices must be arithmetic).");
+#else // Если используется не компилятор Microsoft
+            throw std::invalid_argument("In operator" + whatOperator + ": template argument "
+                                            "of matrix is not arithmetic. "
+                                            "(Both template arguments must be arithmetic).");
+#endif // _MSC_VER
+        }
+        if (x.Columns() != y.Rows())
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Wrong matrices size (to use operator" + whatOperator +
+                              " columns of \"x\" must be equal to \"y\" rows).");
+#else // Если используется не компилятор Microsoft
+            throw std::invalid_argument("In operator" + whatOperator + ": x.Columns()"
+                                        "is not equal to y.Rows(). "
+                                        "(It must be equal).");
+#endif // _MSC_VER
+        }
+        if (x.Rows() == 0 || y.Rows() == 0) // см. комментарий на строках 155-156
+        {
+#ifdef _MSC_VER
+            _STL_REPORT_ERROR("Marix have null size. To use operator" + whatOperator +
+                              " Matrix's size mustn't be null");
+#else
+            throw std::invalid_argument("In operator" + whatOperator + ": Matrix have null size."
+                                        " (Matrix's size mustn't be null).");
+#endif
         }
     }
 } // namespace detail
@@ -428,6 +514,36 @@ public:
         detail::InitializeDM(this->PMem_data, transposed, this->PMem_columns, this->PMem_rows);
         std::swap(this->PMem_rows, this->PMem_columns);
     }
+    
+    
+    #define LHS *this // см. стрку 454
+    template<typename U>
+    void operator+=(const Matrix<U>& rhs)
+    {
+        detail::CheckArithmeticOperationPossiblity(LHS, rhs, static_cast<std::string>("+="));
+        LHS = LHS + rhs;
+    }
+    
+    template<typename U>
+    void operator-=(const Matrix<U>& rhs)
+    {
+        detail::CheckArithmeticOperationPossiblity(LHS, rhs, static_cast<std::string>("-="));
+        LHS = LHS - rhs;
+    }
+    
+    template<typename U>
+    void operator*=(const Matrix<U>& rhs)
+    {
+        detail::CheckMatrix_matrixMultiplicationPossiblity(LHS, rhs, static_cast<std::string>("*="));
+        LHS = LHS * rhs;
+    }
+    
+    template<typename U>
+    void operator*=(const U& rhs)
+    {
+        detail::CheckArithmeticOperationPossiblity(LHS, rhs, static_cast<std::string>("*="));
+    }
+    #undef LHS
 
 
     SizeType Rows() const noexcept
@@ -501,8 +617,9 @@ template<typename T, typename U>
 auto operator+(const Matrix<T>& lhs, const Matrix<U>& rhs) -> Matrix<decltype(lhs[0][0] + rhs[0][0])>
     // Оператор +. Сладывает 2 матрицы. Работает только если Т - арифметический тип
 {
-    detail::CheckForPossiblityOfDoingAnArithmeticOperation(lhs, rhs, std::string("+"));
-    Matrix<decltype(lhs[0][0] + rhs[0][0])> total(lhs.Rows(), lhs.Columns()); // см. комментарий на строке 429.
+    typedef decltype(lhs[0][0] + rhs[0][0]) ArithmeticTotalType;
+    detail::CheckArithmeticOperationPossiblity(lhs, rhs, static_cast<std::string>("+"));
+    Matrix<ArithmeticTotalType> total(lhs.Rows(), lhs.Columns()); // см. комментарий на строке 526.
     for (std::size_t i = 0; i < lhs.Rows(); i++)
     {
         for (std::size_t j = 0; j < lhs.Columns(); j++)
@@ -511,6 +628,67 @@ auto operator+(const Matrix<T>& lhs, const Matrix<U>& rhs) -> Matrix<decltype(lh
         }
     }
     return total;
+}
+
+template<typename T, typename U>
+auto operator-(const Matrix<T>& lhs, const Matrix<U>& rhs) -> Matrix<decltype(lhs[0][0] - rhs[0][0])>
+    // Оператор -. Вычитает 2 матрицы.
+{
+    typedef decltype(lhs[0][0] - rhs[0][0]) ArithmeticDifferenceType;
+    detail::CheckArithmeticOperationPossiblity(lhs, rhs, static_cast<std::string>("-"));
+    Matrix<ArithmeticDifferenceType> difference(lhs.Rows(), lhs.Columns()); // см. комментарий на строке 595.
+    for (std::size_t i = 0; i < lhs.Rows(); i++)
+    {
+        for (std::size_t j = 0; j < lhs.Columns(); j++)
+        {
+            difference[i][j] = lhs[i][j] - rhs[i][j];
+        }
+    }
+    return difference;
+}
+
+template<typename T, typename U>
+auto operator*(const Matrix<T>& lhs, const Matrix<U>& rhs) -> Matrix<decltype(lhs[0][0] * rhs[0][0])>
+    //  Оператор *. Умножает 2 матрицы
+{
+    typedef decltype(lhs[0][0] * rhs[0][0]) ArithmeticProductType;
+    detail::CheckMatrix_matrixMultiplicationPossiblity(lhs, rhs, static_cast<std::string>("*"));
+    Matrix<ArithmeticProductType> product(lhs.Rows(), rhs.Columns());
+    for (std::size_t i = 0; i < lhs.Rows(); i++)
+    {
+        for (std::size_t j = 0; j < rhs.Columns(); j++)
+        {
+            for (std::size_t k = 0; k < lhs.Columns(); k++)
+            {
+                product[i][j] = lhs[i][k] * rhs[k][j];
+            }
+        }
+    }
+    return product;
+}
+
+template<typename T, typename U>
+auto operator*(const Matrix<T>& lhs, const U& rhs) -> Matrix<decltype(lhs[0][0] * rhs)>
+    // Оператор *. Умножает матрицу на число
+{
+    typedef decltype(lhs[0][0] * rhs) ArithmeticProductType;
+    detail::CheckArithmeticOperationPossiblity(lhs, rhs, static_cast<std::string>("*"));
+    Matrix<ArithmeticProductType> product(lhs.Rows(), lhs.Columns());
+    for (std::size_t i = 0; i < lhs.Rows(); i++)
+    {
+        for (std::size_t j = 0; j < lhs.Columns(); j++)
+        {
+            product[i][j] = lhs[i][j] * rhs;
+        }
+    }
+    return product;
+}
+
+template<typename T, typename U>
+inline auto operator*(const T& lhs, const Matrix<U>& rhs) -> Matrix<decltype(lhs * rhs[0][0])>
+    // Оператор *. Умножает число на матрицу (просто чтоб было)
+{
+    return rhs * lhs;
 }
 
 
